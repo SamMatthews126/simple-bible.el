@@ -23,9 +23,15 @@
 ;; [[https://biblereadingplangenerator.com/?start=2026-09-01&total=365&format=calendar&order=traditional&daysofweek=1,2,3,4,5,6,7&books=OT,NT&lang=en&logic=words&checkbox=1&colors=0&dailypsalm=0&dailyproverb=0&otntoverlap=0&reverse=0&stats=0&dailystats=0&nodates=0&includeurls=0&urlsite=biblegateway&urlversion=NIV][Try different reading plans]]
 
 ;;; Code:
-(defcustom simple-bible-path "~/.emacs.d/elpa/simple-bible")
-(defcustom simple-bible-plan "bibleplan")
-(defcustom simple-bible-book "kjv")
+(defcustom simple-bible-path
+	"~/.emacs.d/elpa/simple-bible"
+	"Path to default bible text and plan datastore")
+(defcustom simple-bible-plan
+	"bibleplan"
+	"Current plan name - without csv file extension")
+(defcustom simple-bible-book
+	"kjv"
+	"Currently selected bible - without tsv file extension")
 
 (defun simple-bible--get-plan-path()
   (format "%s.csv" (file-name-concat simple-bible-path "plans" simple-bible-plan)))
