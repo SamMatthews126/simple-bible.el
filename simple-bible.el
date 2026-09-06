@@ -8,9 +8,19 @@
 
 ;;; Commentary:
 
-;;; The most popular bible reader on emacs right now uses bible gateway to retrieve bible passages
-;;; This requires an internet connection which is not always doable
-;;; This is heavily based of of this kjv project and uses the King James Bible TSV from there https://github.com/layeh/kjv
+;; The most popular bible reader on emacs right now uses bible gateway to retrieve bible passages
+;; This requires an internet connection which is not always doable
+;; This is heavily based of of this kjv project and uses the King James Bible TSV from there https://github.com/layeh/kjv
+
+;; TODO
+;; Format headings using overlays
+;; - https://duckduckgo.com/?q=emacs+overlay+to+make+text+appear+centered&t=ffab&ia=web
+;;; - https://www.gnu.org/software/emacs/manual/html_node/elisp/Overlays.html
+;; Alternative bibles
+;;; - https://github.com/LukeSmithxyz/grb
+;;; - https://github.com/LukeSmithxyz/vul
+;; [[https://github.com/Zacalot/bible-mode/blob/main/bible-mode.el][Figure out chapter by chapter interface]]
+;; [[https://biblereadingplangenerator.com/?start=2026-09-01&total=365&format=calendar&order=traditional&daysofweek=1,2,3,4,5,6,7&books=OT,NT&lang=en&logic=words&checkbox=1&colors=0&dailypsalm=0&dailyproverb=0&otntoverlap=0&reverse=0&stats=0&dailystats=0&nodates=0&includeurls=0&urlsite=biblegateway&urlversion=NIV][Try different reading plans]]
 
 ;;; Code:
 (defcustom simple-bible-path "~/.emacs.d/elpa/simple-bible")
