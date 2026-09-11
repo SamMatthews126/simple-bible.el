@@ -21,6 +21,8 @@
 ;;; - https://github.com/LukeSmithxyz/vul
 ;; [[https://github.com/Zacalot/bible-mode/blob/main/bible-mode.el][Figure out chapter by chapter interface]]
 ;; [[https://biblereadingplangenerator.com/?start=2026-09-01&total=365&format=calendar&order=traditional&daysofweek=1,2,3,4,5,6,7&books=OT,NT&lang=en&logic=words&checkbox=1&colors=0&dailypsalm=0&dailyproverb=0&otntoverlap=0&reverse=0&stats=0&dailystats=0&nodates=0&includeurls=0&urlsite=biblegateway&urlversion=NIV][Try different reading plans]]
+;; Searching format extension of bible gateway "Book/Short Chapter(-Chapter) Verse(-Verse);..."
+;; Searching already supports wildcards with * since it is already a regex so that could work to my advantage with the other fields (Chapter and Verse)
 
 ;;; Code:
 (defcustom simple-bible-path
@@ -101,31 +103,32 @@
   (interactive)
   (with-temp-buffer
     (insert-file-contents (simple-bible--get-plan-path))
-		(let ((line-point (search-forward (format-time-string "%F"))))
-      (when line-point
-        (let (
-				  (books (string-split (substring (nth 1 (string-split (buffer-substring-no-properties (line-beginning-position) (line-end-position)) "\",\"")) 0 -1) ";"))
-          (book-chapter-pairs (list)))
-          (dolist (book books)
-            (let* (
-  						(book-parts (string-split book " "))
-              (chapter-range (string-split (format "%s" (car (last book-parts))) "-"))
-              (name (string-trim (if (equal (length book-parts) 3) (concat (nth 0 book-parts) " " (nth 1 book-parts)) (nth 0 book-parts))))
-              (chapter-start (string-to-number (nth 0 chapter-range)))
-              (chapter-end (if (equal (length chapter-range) 1) chapter-start (string-to-number (nth 1 chapter-range)))))
-							;Note that you cannot use \t for keep-lines - needs to be a literal tab character
-  					  (cl-loop for i from chapter-start to chapter-end do (cl-pushnew (format "%s	[0-9]*	%d	" name i) book-chapter-pairs))))
-          (erase-buffer)
-          (insert-file-contents (simple-bible--get-text-path))
-          ;keep-lines expects a \| rather than \\|
-          (keep-lines (mapconcat 'identity book-chapter-pairs "\\|"))
-          (let ((content (buffer-string)))
-            (with-current-buffer (generate-new-buffer "*Bible Daily Reading*")
-				      (simple-bible--print-bible-verses content)
-              (goto-char (point-min))
-							;(view-mode)
-              (simple-bible-mode)
-              (switch-to-buffer (current-buffer)))))))
+		(setq-local line-point (search-forward (format-time-string "%F") nil t))
+		(when (not line-point) (setq-local line-point (search-forward (format-time-string "%m-%d") nil t)))
+    (when line-point
+      (let (
+				(books (string-split (substring (nth 1 (string-split (buffer-substring-no-properties (line-beginning-position) (line-end-position)) "\",\"")) 0 -1) ";"))
+        (book-chapter-pairs (list)))
+        (dolist (book books)
+          (let* (
+  				  (book-parts (string-split book " "))
+            (chapter-range (string-split (format "%s" (car (last book-parts))) "-"))
+            (name (string-trim (if (equal (length book-parts) 3) (concat (nth 0 book-parts) " " (nth 1 book-parts)) (nth 0 book-parts))))
+            (chapter-start (string-to-number (nth 0 chapter-range)))
+            (chapter-end (if (equal (length chapter-range) 1) chapter-start (string-to-number (nth 1 chapter-range)))))
+						;Note that you cannot use \t for keep-lines - needs to be a literal tab character
+  					(cl-loop for i from chapter-start to chapter-end do (cl-pushnew (format "%s	[0-9]*	%d	" name i) book-chapter-pairs))))
+        (erase-buffer)
+        (insert-file-contents (simple-bible--get-text-path))
+        ;keep-lines expects a \| rather than \\|
+        (keep-lines (mapconcat 'identity book-chapter-pairs "\\|"))
+        (let ((content (buffer-string)))
+          (with-current-buffer (generate-new-buffer "*Bible Daily Reading*")
+				    (simple-bible--print-bible-verses content)
+            (goto-char (point-min))
+						;(view-mode)
+            (simple-bible-mode)
+            (switch-to-buffer (current-buffer))))))
   	(kill-current-buffer)))
 
 (provide 'simple-bible)
