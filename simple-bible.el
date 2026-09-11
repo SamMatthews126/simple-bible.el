@@ -39,6 +39,7 @@
 (defun simple-bible--get-text-path()
   (format "%s.tsv" (file-name-concat simple-bible-path "texts" simple-bible-book)))
 
+(require 'subr-x)
 ;Doesn't work to remove from buffer list but keeping here for now
 (define-derived-mode simple-bible-mode view-mode "Simple Bible View"
  (local-set-key (kbd "q") (lambda ()
@@ -73,29 +74,28 @@
         (simple-bible-mode))
     (select-window (display-buffer buf)))))
 
+(defun simple-bible--print-bible-verses(content)
+  (cl-loop for verse in (string-split content "\n") for index from 0 do (progn
+		(when (not (string-blank-p verse))
+	    (let ((fields (split-string verse "\t")))
+		    (when (equal (nth 4 fields) "1") 
+  			  (when (or (equal (nth 3 fields) "1") (equal index 0))
+  				  (insert (format "\n----%s----\n" (nth 0 fields))))
+  			  (insert (format "\n----Chapter %s----\n" (nth 3 fields))))
+  		  (insert (format "%s: %s\n" (nth 4 fields) (nth 5 fields))))))))
+
 (defun simple-bible-open(book)
 "Return the current bible and display the given book"
   (interactive "sEnter Book: ")
-  (with-current-buffer (generate-new-buffer "*Bible*")
+  (with-temp-buffer
     (insert-file-contents (simple-bible--get-text-path))
     (keep-lines (format "^\\(%s\\)\t\\|\\(\t%s\t\\)" book book))
-    (let (result)
-			(dolist (line (split-string (buffer-string) "\n" t))
-				(let* (
-  				(fields (split-string line "\t"))
-          (verse (concat (nth 4 fields) ": " (nth 5 fields))))
-					(when (equal (nth 4 fields) "1") 
-						(when (equal (nth 3 fields) "1")
-							(push (nth 0 fields) result))
-						(push (format "\nChapter %s\n" (nth 3 fields)) result))
-          (push verse result)))
-      (erase-buffer)
-      (dolist (verse (nreverse result))
-        (insert verse)
-      (when (not (equal verse "\n")) (insert "\n"))))
-    (goto-char (point-min))
-    (simple-bible-mode)
-    (switch-to-buffer (current-buffer))))
+		(let ((content (buffer-string)))
+			(with-current-buffer (generate-new-buffer "*Bible*")
+				(simple-bible--print-bible-verses content)
+				(goto-char (point-min))
+				(simple-bible-mode)
+				(switch-to-buffer (current-buffer))))))
 
 (defun simple-bible-open-plan()
   (interactive)
@@ -120,15 +120,8 @@
           ;keep-lines expects a \| rather than \\|
           (keep-lines (mapconcat 'identity book-chapter-pairs "\\|"))
           (let ((content (buffer-string)))
-            (message content)
             (with-current-buffer (generate-new-buffer "*Bible Daily Reading*")
-              (cl-loop for line in (string-split content "\n") for i from 0 do (progn
-                (let ((fields (split-string line "\t")))
-  					      (when (equal (nth 4 fields) "1") 
-  						      (when (or (equal (nth 3 fields) "1") (equal i 0))
-  							      (insert (format "\n----%s----\n" (nth 0 fields))))
-  						      (insert (format "\n----Chapter %s----\n" (nth 3 fields))))
-  							  (insert (format "%s: %s\n" (nth 4 fields) (nth 5 fields))))))
+				      (simple-bible--print-bible-verses content)
               (goto-char (point-min))
 							;(view-mode)
               (simple-bible-mode)
