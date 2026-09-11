@@ -114,7 +114,7 @@
               (chapter-start (string-to-number (nth 0 chapter-range)))
               (chapter-end (if (equal (length chapter-range) 1) chapter-start (string-to-number (nth 1 chapter-range)))))
 							;Note that you cannot use \t for keep-lines - needs to be a literal tab character
-  					  (cl-loop for i from chapter-start to chapter-end do (cl-pushnew 'book-chapter-pairs (format "%s	[0-9]*	%d	" name i)))))
+  					  (cl-loop for i from chapter-start to chapter-end do (cl-pushnew (format "%s	[0-9]*	%d	" name i) book-chapter-pairs))))
           (erase-buffer)
           (insert-file-contents (simple-bible--get-text-path))
           ;keep-lines expects a \| rather than \\|
