@@ -22,7 +22,9 @@
 ;; [[https://github.com/Zacalot/bible-mode/blob/main/bible-mode.el][Figure out chapter by chapter interface]]
 ;; [[https://biblereadingplangenerator.com/?start=2026-09-01&total=365&format=calendar&order=traditional&daysofweek=1,2,3,4,5,6,7&books=OT,NT&lang=en&logic=words&checkbox=1&colors=0&dailypsalm=0&dailyproverb=0&otntoverlap=0&reverse=0&stats=0&dailystats=0&nodates=0&includeurls=0&urlsite=biblegateway&urlversion=NIV][Try different reading plans]]
 ;; Searching format extension of bible gateway "Book/Short Chapter(-Chapter) Verse(-Verse);..."
-;; Searching already supports wildcards with * since it is already a regex so that could work to my advantage with the other fields (Chapter and Verse)
+;;; Need to implement verse ranges
+;; Link format to allow referencing the bible in org mode without inserting the entire text simple-bible://link?Short1=ch1-ch2;v1-v2&Short2=ch1...
+;;; Advice around browse-url to handle the custom simple-bible protocol, take the query and plug it in to the regular routine to display the correct bible verses
 
 ;;; Code:
 (defcustom simple-bible-path
@@ -77,21 +79,50 @@
     (select-window (display-buffer buf)))))
 
 (defun simple-bible--print-bible-verses(content)
-  (cl-loop for verse in (string-split content "\n") for index from 0 do (progn
-		(when (not (string-blank-p verse))
-	    (let ((fields (split-string verse "\t")))
-		    (when (equal (nth 4 fields) "1") 
-  			  (when (or (equal (nth 3 fields) "1") (equal index 0))
-  				  (insert (format "\n----%s----\n" (nth 0 fields))))
-  			  (insert (format "\n----Chapter %s----\n" (nth 3 fields))))
-  		  (insert (format "%s: %s\n" (nth 4 fields) (nth 5 fields))))))))
+	(let ((books-seen (list)))
+    (cl-loop for verse in (string-split content "\n") for index from 0 do (progn
+		  (when (not (string-blank-p verse))
+				(let* (
+					(fields (split-string verse "\t"))
+					(book (car fields)))
+				  (when (not (member book books-seen)) (cl-pushnew book books-seen) (insert (format "\n----%s----\n" (nth 0 fields))))
+	        (let* (
+				    (fields (split-string verse "\t"))
+				    (first-verse (equal (nth 4 fields) "1")))
+  			    (when first-verse (insert (format "\n----Chapter %s----\n" (nth 3 fields))))
+  		      (insert (format "%s: %s\n" (nth 4 fields) (nth 5 fields))))))))))
 
-(defun simple-bible-open(book)
-"Return the current bible and display the given book"
-  (interactive "sEnter Book: ")
+(defun simple-bible--search(query)
+  (let (
+	  (books (string-split query ";"))
+    (book-chapter-pairs (list)))
+    (dolist (book books)
+      (let* (
+  	    (book-parts (string-split (string-trim book) " "))
+			  ; Deals with things like "1 Kings"
+        (numeric-prefix (> (string-to-number (car book-parts)) 0))
+        (name (string-trim (if numeric-prefix (concat (car book-parts) " " (nth 1 book-parts)) (car book-parts)))))
+
+				(setq-local
+				  chapter-range nil
+				  chapter-start nil
+				  chapter-end nil)
+				; Subtract 1 from the length of the list when we have a numeric prefix - treating the two entries as one for the book name
+        (when (> (- (length book-parts) (if numeric-prefix 1 0)) 1) (setq-local chapter-range (string-split (format "%s" (car (last book-parts))) "-")))
+        (when chapter-range (setq-local chapter-start (string-to-number (car chapter-range))))
+        (when chapter-start (setq-local chapter-end (if (equal (length chapter-range) 1) chapter-start (string-to-number (nth 1 chapter-range)))))
+				(if chapter-start
+			    ;Note that you cannot use \t for keep-lines - needs to be a literal tab character
+  		    (cl-loop for i from chapter-start to chapter-end do (cl-pushnew (format "%s	[0-9]*	%d	" name i) book-chapter-pairs))
+				  (cl-pushnew (format "%s	[0-9]*" name) book-chapter-pairs))))
+	  book-chapter-pairs))
+
+(defun simple-bible-open(query)
+"Return the current bible and display the given query results"
+  (interactive "sEnter Query: ")
   (with-temp-buffer
     (insert-file-contents (simple-bible--get-text-path))
-    (keep-lines (format "^\\(%s\\)\t\\|\\(\t%s\t\\)" book book))
+    (keep-lines (mapconcat 'identity (simple-bible--search query) "\\|"))
 		(let ((content (buffer-string)))
 			(with-current-buffer (generate-new-buffer "*Bible*")
 				(simple-bible--print-bible-verses content)
@@ -106,18 +137,7 @@
 		(setq-local line-point (search-forward (format-time-string "%F") nil t))
 		(when (not line-point) (setq-local line-point (search-forward (format-time-string "%m-%d") nil t)))
     (when line-point
-      (let (
-				(books (string-split (substring (nth 1 (string-split (buffer-substring-no-properties (line-beginning-position) (line-end-position)) "\",\"")) 0 -1) ";"))
-        (book-chapter-pairs (list)))
-        (dolist (book books)
-          (let* (
-  				  (book-parts (string-split book " "))
-            (chapter-range (string-split (format "%s" (car (last book-parts))) "-"))
-            (name (string-trim (if (equal (length book-parts) 3) (concat (nth 0 book-parts) " " (nth 1 book-parts)) (nth 0 book-parts))))
-            (chapter-start (string-to-number (nth 0 chapter-range)))
-            (chapter-end (if (equal (length chapter-range) 1) chapter-start (string-to-number (nth 1 chapter-range)))))
-						;Note that you cannot use \t for keep-lines - needs to be a literal tab character
-  					(cl-loop for i from chapter-start to chapter-end do (cl-pushnew (format "%s	[0-9]*	%d	" name i) book-chapter-pairs))))
+      (let ((book-chapter-pairs (simple-bible--search (substring (nth 1 (string-split (buffer-substring-no-properties (line-beginning-position) (line-end-position)) "\",\"")) 0 -1 ))))
         (erase-buffer)
         (insert-file-contents (simple-bible--get-text-path))
         ;keep-lines expects a \| rather than \\|
