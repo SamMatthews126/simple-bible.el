@@ -21,8 +21,6 @@
 ;;; - https://github.com/LukeSmithxyz/vul
 ;; [[https://github.com/Zacalot/bible-mode/blob/main/bible-mode.el][Figure out chapter by chapter interface]]
 ;; [[https://biblereadingplangenerator.com/?start=2026-09-01&total=365&format=calendar&order=traditional&daysofweek=1,2,3,4,5,6,7&books=OT,NT&lang=en&logic=words&checkbox=1&colors=0&dailypsalm=0&dailyproverb=0&otntoverlap=0&reverse=0&stats=0&dailystats=0&nodates=0&includeurls=0&urlsite=biblegateway&urlversion=NIV][Try different reading plans]]
-;; Searching format extension of bible gateway "Book/Short Chapter(-Chapter) Verse(-Verse);..."
-;;; Need to implement verse ranges
 ;; Link format to allow referencing the bible in org mode without inserting the entire text simple-bible://link?Short1=ch1-ch2;v1-v2&Short2=ch1...
 ;;; Advice around browse-url to handle the custom simple-bible protocol, take the query and plug it in to the regular routine to display the correct bible verses
 
@@ -79,7 +77,9 @@
     (select-window (display-buffer buf)))))
 
 (defun simple-bible--print-bible-verses(content)
-	(let ((books-seen (list)))
+	(let (
+		(books-seen (list))
+		(book-chapters-seen (list)))
     (cl-loop for verse in (string-split content "\n") for index from 0 do (progn
 		  (when (not (string-blank-p verse))
 				(let* (
@@ -88,8 +88,9 @@
 				  (when (not (member book books-seen)) (cl-pushnew book books-seen) (insert (format "\n----%s----\n" (nth 0 fields))))
 	        (let* (
 				    (fields (split-string verse "\t"))
-				    (first-verse (equal (nth 4 fields) "1")))
-  			    (when first-verse (insert (format "\n----Chapter %s----\n" (nth 3 fields))))
+						(chapter (nth 3 fields))
+						(book-chapter (concat book chapter)))
+  			    (when (not (member book-chapter book-chapters-seen)) (cl-pushnew book-chapter book-chapters-seen) (insert (format "\n----Chapter %s----\n" chapter)))
   		      (insert (format "%s: %s\n" (nth 4 fields) (nth 5 fields))))))))))
 
 (defun simple-bible--search(query)
@@ -101,19 +102,27 @@
   	    (book-parts (string-split (string-trim book) " "))
 			  ; Deals with things like "1 Kings"
         (numeric-prefix (> (string-to-number (car book-parts)) 0))
+				(parts-count (- (length book-parts) (if numeric-prefix 1 0)))
         (name (string-trim (if numeric-prefix (concat (car book-parts) " " (nth 1 book-parts)) (car book-parts)))))
 
 				(setq-local
 				  chapter-range nil
 				  chapter-start nil
-				  chapter-end nil)
+				  chapter-end nil
+					verse-range nil
+					verse-start nil
+					verse-end nil)
 				; Subtract 1 from the length of the list when we have a numeric prefix - treating the two entries as one for the book name
-        (when (> (- (length book-parts) (if numeric-prefix 1 0)) 1) (setq-local chapter-range (string-split (format "%s" (car (last book-parts))) "-")))
+        (when (> parts-count 1) (setq-local chapter-range (string-split (nth (if numeric-prefix 2 1) book-parts) "-")))
         (when chapter-range (setq-local chapter-start (string-to-number (car chapter-range))))
         (when chapter-start (setq-local chapter-end (if (equal (length chapter-range) 1) chapter-start (string-to-number (nth 1 chapter-range)))))
+				; We have more parameters after the chapters - this means we have verses
+				(when (and chapter-range (> parts-count 2)) (setq-local verse-range (string-split (nth (+ (if numeric-prefix 2 1) 1) book-parts) "-")))
+        (when verse-range (setq-local verse-start (string-to-number (car verse-range))))
+        (when verse-start (setq-local verse-end (if (equal (length verse-range) 1) verse-start (string-to-number (nth 1 verse-range)))))
 				(if chapter-start
 			    ;Note that you cannot use \t for keep-lines - needs to be a literal tab character
-  		    (cl-loop for i from chapter-start to chapter-end do (cl-pushnew (format "%s	[0-9]*	%d	" name i) book-chapter-pairs))
+  		    (cl-loop for i from chapter-start to chapter-end do (if verse-start (cl-loop for j from verse-start to verse-end do (cl-pushnew (format "%s	[0-9]*	%d	%d	" name i j) book-chapter-pairs)) (cl-pushnew (format "%s	[0-9]*	%d	" name i) book-chapter-pairs)))
 				  (cl-pushnew (format "%s	[0-9]*" name) book-chapter-pairs))))
 	  book-chapter-pairs))
 
