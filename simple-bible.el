@@ -34,6 +34,9 @@
 (defcustom simple-bible-book
 	"kjv"
 	"Currently selected bible - without tsv file extension")
+(defcustom simple-bible-link-preview
+	t
+	"Decide if you want to open the queried bible passages when you copy or insert a link")
 
 (defun simple-bible--get-plan-path()
   (format "%s.csv" (file-name-concat simple-bible-path "plans" simple-bible-plan)))
@@ -126,18 +129,40 @@
 				  (cl-pushnew (format "%s	[0-9]*" name) book-chapter-pairs))))
 	  book-chapter-pairs))
 
-(defun simple-bible-open(query)
-"Return the current bible and display the given query results"
-  (interactive "sEnter Query: ")
+(defun simple-bible--query(query)
   (with-temp-buffer
     (insert-file-contents (simple-bible--get-text-path))
     (keep-lines (mapconcat 'identity (simple-bible--search query) "\\|"))
-		(let ((content (buffer-string)))
-			(with-current-buffer (generate-new-buffer "*Bible*")
-				(simple-bible--print-bible-verses content)
-				(goto-char (point-min))
-				(simple-bible-mode)
-				(switch-to-buffer (current-buffer))))))
+	  (buffer-string)))
+
+(defun simple-bible--open(query)
+	(with-current-buffer (generate-new-buffer "*Bible*")
+		(simple-bible--print-bible-verses (simple-bible--query query))
+		(goto-char (point-min))
+		(simple-bible-mode)
+		(switch-to-buffer (current-buffer))))
+
+(defun simple-bible-insert-link(query)
+	(interactive "sEnter Query: "))
+
+(defun simple-bible-copy-link(query)
+	(interactive "sEnter Query: "))
+
+(defun simple-bible-insert-text(query)
+	(interactive "sEnter Query: ")
+	(simple-bible--print-bible-verses (simple-bible--query query)))
+
+(defun simple-bible-copy-text(query)
+	(interactive "sEnter Query: ")
+	(with-temp-buffer
+	  (simple-bible--print-bible-verses (simple-bible--query query))
+	  (kill-new (buffer-string)))
+	(message "Copied bible passages to clipboard"))
+
+(defun simple-bible-open(query)
+"Return the current bible and display the given query results"
+  (interactive "sEnter Query: ")
+  (simple-bible--open query))
 
 (defun simple-bible-open-plan()
   (interactive)
