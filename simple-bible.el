@@ -90,7 +90,6 @@
 					(book (car fields)))
 				  (when (not (member book books-seen)) (cl-pushnew book books-seen) (insert (format "\n----%s----\n" (nth 0 fields))))
 	        (let* (
-				    (fields (split-string verse "\t"))
 						(chapter (nth 3 fields))
 						(book-chapter (concat book chapter)))
   			    (when (not (member book-chapter book-chapters-seen)) (cl-pushnew book-chapter book-chapters-seen) (insert (format "\n----Chapter %s----\n" chapter)))
@@ -106,27 +105,42 @@
 			  ; Deals with things like "1 Kings"
         (numeric-prefix (> (string-to-number (car book-parts)) 0))
 				(parts-count (- (length book-parts) (if numeric-prefix 1 0)))
-        (name (string-trim (if numeric-prefix (concat (car book-parts) " " (nth 1 book-parts)) (car book-parts)))))
+        (name (string-replace "*" "[a-zA-Z1-3\s]*" (string-trim (if numeric-prefix (concat (car book-parts) " " (nth 1 book-parts)) (car book-parts))))))
 
 				(setq-local
+				  chapter-range-string nil
 				  chapter-range nil
 				  chapter-start nil
 				  chapter-end nil
+				  verse-range-string nil
 					verse-range nil
 					verse-start nil
 					verse-end nil)
 				; Subtract 1 from the length of the list when we have a numeric prefix - treating the two entries as one for the book name
-        (when (> parts-count 1) (setq-local chapter-range (string-split (nth (if numeric-prefix 2 1) book-parts) "-")))
+        (when (> parts-count 1) (setq-local chapter-range-string (nth (if numeric-prefix 2 1) book-parts)))
+				(when chapter-range-string (setq-local chapter-range (string-split chapter-range-string "-")))
         (when chapter-range (setq-local chapter-start (string-to-number (car chapter-range))))
         (when chapter-start (setq-local chapter-end (if (equal (length chapter-range) 1) chapter-start (string-to-number (nth 1 chapter-range)))))
 				; We have more parameters after the chapters - this means we have verses
-				(when (and chapter-range (> parts-count 2)) (setq-local verse-range (string-split (nth (+ (if numeric-prefix 2 1) 1) book-parts) "-")))
+				(when (and chapter-range (> parts-count 2)) (setq-local verse-range-string (nth (+ (if numeric-prefix 2 1) 1) book-parts)))
+				(when verse-range-string (setq-local verse-range (string-split verse-range-string "-")))
         (when verse-range (setq-local verse-start (string-to-number (car verse-range))))
         (when verse-start (setq-local verse-end (if (equal (length verse-range) 1) verse-start (string-to-number (nth 1 verse-range)))))
-				(if chapter-start
+				(if chapter-range
 			    ;Note that you cannot use \t for keep-lines - needs to be a literal tab character
-  		    (cl-loop for i from chapter-start to chapter-end do (if verse-start (cl-loop for j from verse-start to verse-end do (cl-pushnew (format "%s	[0-9]*	%d	%d	" name i j) book-chapter-pairs)) (cl-pushnew (format "%s	[0-9]*	%d	" name i) book-chapter-pairs)))
-				  (cl-pushnew (format "%s	[0-9]*" name) book-chapter-pairs))))
+					(if (string-search "*" chapter-range-string)
+						(if verse-range
+						  (if (string-search "*" verse-range-string)
+								(cl-pushnew (format "^[a-zA-Z1-3\s]*	%s	[0-9]*" name) book-chapter-pairs)
+								(cl-loop for i from verse-start to verse-end do
+									(cl-pushnew (format "^[a-zA-Z1-3\s]*	%s	[0-9]*	[a-zA-Z0-9\s]*	%d	" name i) book-chapter-pairs)))
+							(cl-pushnew (format "^[a-zA-Z1-3\s]*	%s	[0-9]*" name) book-chapter-pairs))
+  		      (cl-loop for i from chapter-start to chapter-end do
+						  (if (and verse-range (not (string-search "*" verse-range-string)))
+							  (cl-loop for j from verse-start to verse-end do
+								  (cl-pushnew (format "^[a-zA-Z1-3\s]*	%s	[0-9]*	%d	%d	" name i j) book-chapter-pairs))
+							  (cl-pushnew (format "^[a-zA-Z1-3\s]*	%s	[0-9]*	%d	" name i) book-chapter-pairs))))
+				  (cl-pushnew (format "^[a-zA-Z1-3\s]*	%s	[0-9]*" name) book-chapter-pairs))))
 	  book-chapter-pairs))
 
 (defun simple-bible--query(query)
