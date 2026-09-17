@@ -23,6 +23,7 @@
 ;; [[https://biblereadingplangenerator.com/?start=2026-09-01&total=365&format=calendar&order=traditional&daysofweek=1,2,3,4,5,6,7&books=OT,NT&lang=en&logic=words&checkbox=1&colors=0&dailypsalm=0&dailyproverb=0&otntoverlap=0&reverse=0&stats=0&dailystats=0&nodates=0&includeurls=0&urlsite=biblegateway&urlversion=NIV][Try different reading plans]]
 ;; Link format to allow referencing the bible in org mode without inserting the entire text simple-bible://link?Short1=ch1-ch2;v1-v2&Short2=ch1...
 ;;; Advice around browse-url to handle the custom simple-bible protocol, take the query and plug it in to the regular routine to display the correct bible verses
+;; Maybe use overlay to highlight the found search query in bold
 
 ;;; Code:
 (defcustom simple-bible-path
@@ -105,7 +106,7 @@
 			  ; Deals with things like "1 Kings"
         (numeric-prefix (> (string-to-number (car book-parts)) 0))
 				(parts-count (- (length book-parts) (if numeric-prefix 1 0)))
-        (name (string-replace "*" "[a-zA-Z1-3\s]*" (string-trim (if numeric-prefix (concat (car book-parts) " " (nth 1 book-parts)) (car book-parts))))))
+        (name (string-replace "*" "[a-zA-Z1-3\s]*" (if numeric-prefix (concat (car book-parts) " " (nth 1 book-parts)) (car book-parts)))))
 
 				(setq-local
 				  chapter-range-string nil
@@ -115,33 +116,43 @@
 				  verse-range-string nil
 					verse-range nil
 					verse-start nil
-					verse-end nil)
+					verse-end nil
+					search-term nil
+					book-part (if (or (not name) (string-empty-p name)) ".*" name)
+					chapter-part "[0-9]*"
+					verse-part "[0-9]*")
+
 				; Subtract 1 from the length of the list when we have a numeric prefix - treating the two entries as one for the book name
         (when (> parts-count 1) (setq-local chapter-range-string (nth (if numeric-prefix 2 1) book-parts)))
 				(when chapter-range-string (setq-local chapter-range (string-split chapter-range-string "-")))
-        (when chapter-range (setq-local chapter-start (string-to-number (car chapter-range))))
+        (when (and chapter-range (not (string-search "*" chapter-range-string)) (setq-local chapter-start (string-to-number (car chapter-range)))))
         (when chapter-start (setq-local chapter-end (if (equal (length chapter-range) 1) chapter-start (string-to-number (nth 1 chapter-range)))))
 				; We have more parameters after the chapters - this means we have verses
 				(when (and chapter-range (> parts-count 2)) (setq-local verse-range-string (nth (+ (if numeric-prefix 2 1) 1) book-parts)))
 				(when verse-range-string (setq-local verse-range (string-split verse-range-string "-")))
-        (when verse-range (setq-local verse-start (string-to-number (car verse-range))))
+        (when (and verse-range (not (string-search "*" verse-range-string)) (setq-local verse-start (string-to-number (car verse-range)))))
         (when verse-start (setq-local verse-end (if (equal (length verse-range) 1) verse-start (string-to-number (nth 1 verse-range)))))
+				; Search term
+				(setq-local search-term-part (if (and verse-range (> parts-count 3)) (format ".*%s.*" (nth (+ (if numeric-prefix 2 1) 2) book-parts)) ".*"))
+
+				;Singular chapter/verse
+				(when (and chapter-range-string (< 2 (length chapter-range)) (not (string-search "*" chapter-range-string))) (setq-local chapter-part chapter-range-string))
+				(when (and verse-range-string (< 2 (length verse-range)) (not (string-search "*" verse-range-string))) (setq-local verse-part verse-range-string))
+
+			  ;Note that you cannot use \t for keep-lines - needs to be a literal tab character
 				(if chapter-range
-			    ;Note that you cannot use \t for keep-lines - needs to be a literal tab character
-					(if (string-search "*" chapter-range-string)
-						(if verse-range
-						  (if (string-search "*" verse-range-string)
-								(cl-pushnew (format "^[a-zA-Z1-3\s]*	%s	[0-9]*" name) book-chapter-pairs)
-								(cl-loop for i from verse-start to verse-end do
-									(cl-pushnew (format "^[a-zA-Z1-3\s]*	%s	[0-9]*	[a-zA-Z0-9\s]*	%d	" name i) book-chapter-pairs)))
-							(cl-pushnew (format "^[a-zA-Z1-3\s]*	%s	[0-9]*" name) book-chapter-pairs))
-  		      (cl-loop for i from chapter-start to chapter-end do
-						  (if (and verse-range (not (string-search "*" verse-range-string)))
+					(if chapter-start
+					  (cl-loop for i from chapter-start to chapter-end do
+						  (if verse-start
 							  (cl-loop for j from verse-start to verse-end do
-								  (cl-pushnew (format "^[a-zA-Z1-3\s]*	%s	[0-9]*	%d	%d	" name i j) book-chapter-pairs))
-							  (cl-pushnew (format "^[a-zA-Z1-3\s]*	%s	[0-9]*	%d	" name i) book-chapter-pairs))))
-				  (cl-pushnew (format "^[a-zA-Z1-3\s]*	%s	[0-9]*" name) book-chapter-pairs))))
-	  book-chapter-pairs))
+								  (cl-pushnew (format "^[a-zA-Z1-3\s]*	%s	[0-9]*	%d	%d	%s" book-part i j search-term-part) book-chapter-pairs))
+							  (cl-pushnew (format "^[a-zA-Z1-3\s]*	%s	[0-9]*	%d	%s	%s" book-part i verse-part search-term-part) book-chapter-pairs)))
+						(if verse-start
+							(cl-loop for i from verse-start to verse-end do
+						    (cl-pushnew (format "^[a-zA-Z1-3\s]*	%s	[0-9]*	%s	%d	%s" book-part chapter-part i search-term-part) book-chapter-pairs))
+							(cl-pushnew (format "^[a-zA-Z1-3\s]*	%s	[0-9]*	%s	%s	%s" book-part chapter-part verse-part search-term-part) book-chapter-pairs)))
+					(cl-pushnew (format "^[a-zA-Z1-3\s]*	%s	[0-9]*	%s	%s	%s" book-part chapter-part verse-part search-term-part) book-chapter-pairs))))
+		book-chapter-pairs))
 
 (defun simple-bible--query(query)
   (with-temp-buffer
