@@ -22,6 +22,7 @@
 ;; [[https://github.com/Zacalot/bible-mode/blob/main/bible-mode.el][Figure out chapter by chapter interface]]
 ;; [[https://biblereadingplangenerator.com/?start=2026-09-01&total=365&format=calendar&order=traditional&daysofweek=1,2,3,4,5,6,7&books=OT,NT&lang=en&logic=words&checkbox=1&colors=0&dailypsalm=0&dailyproverb=0&otntoverlap=0&reverse=0&stats=0&dailystats=0&nodates=0&includeurls=0&urlsite=biblegateway&urlversion=NIV][Try different reading plans]]
 ;; Link format to allow referencing the bible in org mode without inserting the entire text simple-bible://link?Short1=ch1-ch2;v1-v2&Short2=ch1...
+;;; https://duckduckgo.com/?q=emacs+construct+and+parse+urls&ia=web
 ;;; Advice around browse-url to handle the custom simple-bible protocol, take the query and plug it in to the regular routine to display the correct bible verses
 ;; Maybe use overlay to highlight the found search query in bold
 
